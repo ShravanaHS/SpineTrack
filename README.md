@@ -7,6 +7,8 @@ In the modern digital era, prolonged sitting and sedentary lifestyles have becom
 **What Is Tech Neck?**
 Even small forward tilts significantly increase spinal loading. This highlights the need for early detection before posture degradation progresses into severe cervical stress conditions.
 
+![Neck Posture Illustration](images/illustration%20which%20denotes%20neck%20posture.png)
+
 Traditional posture correction methods rely on manual awareness, physical braces, or periodic medical consultations. However, these lack real-time feedback. Affordable wearables focus on step counting, leaving a gap for specialized upper-body tracking.
 
 Additionally, bodyweight exercises like push-ups require proper spinal alignment to prevent injury.
@@ -24,6 +26,8 @@ This project addresses these challenges by designing a compact embedded system, 
 
 **Spine Track** is a wearable embedded system designed to monitor spinal tilt and detect exercise motion in real time. It is built around an **ESP32 microcontroller** and an **MPU6050 Inertial Measurement Unit (IMU)** sensor.
 
+![ESP32 System](images/esp32image.png)
+
 The system operates in two primary modes:
 
 ### 1. Posture Monitoring Mode
@@ -38,12 +42,39 @@ The firmware architecture allows for future enhancements such as additional exer
 
 Spine Track follows a centralized embedded architecture with four primary functional blocks:
 
+![Block Diagram](images/block%20diagram.png)
+
 1.  **Sensor Acquisition Block**: MPU6050 measures acceleration (X, Y, Z). ESP32 reads raw data via I2C and converts it to physical units.
 2.  **Orientation Processing Block**: Calculates pitch angle using trigonometric relationships to determine torso tilt relative to gravity.
 3.  **Control & Mode Management Block**:
     *   **Calibration Button (Long Press – 1s)**: Stores current posture as reference.
     *   **Mode Button**: Switches between Posture and Exercise modes.
+
 4.  **Feedback & Alert Block**: LED indicator (or buzzer) provides real-time feedback for posture alerts and valid exercise repetitions.
+
+## Hardware Configuration & Wiring
+
+![Wiring Connection](images/wiringconn.png)
+
+### Pin Connections
+
+| Component | Pin | ESP32 Pin | Description |
+| :--- | :--- | :--- | :--- |
+| **MPU6050** | VCC | 3.3V / 5V | Power Supply |
+| | GND | GND | Ground |
+| | SDA | GPIO 21 | I2C Data |
+| | SCL | GPIO 22 | I2C Clock |
+| **Push Button** | Terminal 1 | GPIO 4 | Input (Active HIGH) |
+| | Terminal 2 | 3.3V | Logic High Level |
+| | Resistor | GND to GPIO 4 | **10kΩ Pull-Down** |
+| **LED** | Anode (+) | GPIO 2 | Status Indicator |
+| | Cathode (-) | GND | Ground (via 220Ω Resistor) |
+
+### Pull-Down Resistor Logic
+The push button is connected in an **Active HIGH** configuration.
+*   **When Released:** The **10kΩ pull-down resistor** connects the GPIO pin to Ground (LOW, 0V). This ensures the pin doesn't "float" and randomly trigger due to electrical noise.
+*   **When Pressed:** The button connects the GPIO pin directly to 3.3V (HIGH). This strong signal overrides the weak pull-down resistor, registering a valid input.
+
 
 ## Sensor Placement & Axis Mapping
 
@@ -58,6 +89,8 @@ The MPU6050 IMU sensor is mounted on the upper back, centrally between the shoul
 *   **Standing Upright**: Gravity aligns with Y-axis.
 *   **Forward Slouching**: Gravity shifts toward X-axis. Pitch angle deviates positively.
 *   **Push-up (Plank)**: Torso nearly horizontal. Gravity shifts to Z-axis.
+
+![Sensor Orientation](images/sensor%20orientation%20in%20different%20exercise%20condition.png)
 
 ## Orientation Calculation & Angle Computation
 
@@ -75,6 +108,8 @@ If `Deviation > 20 degrees` for > 5 seconds, a posture alert is triggered. This 
 
 ## Features & Implementation
 
+![Flowchart](images/flowchart%20of%20the%20code.png)
+
 ### Calibration Mechanism
 *   **Long-Press Logic**: Press Button 1 for 1 second to store the current pitch as `ReferencePitch`.
 *   **Benefits**: Adapts to different users and mounting positions. Essential for accurate relative monitoring.
@@ -87,6 +122,8 @@ If `Deviation > 20 degrees` for > 5 seconds, a posture alert is triggered. This 
     3.  Start timer. If deviation lasts > 5 seconds -> **Trigger Alert**.
     4.  If posture corrects < 5 seconds -> **Reset Timer**.
 
+![Slouch Detection Test](images/slouthdetectiontest.png)
+
 ### Exercise Detection Algorithm (Push-Ups)
 *   **Objective**: Count valid repetitions using torso orientation.
 *   **State Machine**:
@@ -95,6 +132,39 @@ If `Deviation > 20 degrees` for > 5 seconds, a posture alert is triggered. This 
     *   **Count Rep**: Transition back to UP when `pitch > UpperThreshold` (e.g., Reference - 30°) AND current state is DOWN.
 *   **Feedback**: LED blinks on valid count.
 
+![Exercise Detection](images/exercise%20detetion.png)
+
+## Code Explanation
+
+The firmware is written in C++ using the Arduino framework. You can find the full code here: [SpineTrack.ino](Code/SpineTrack/SpineTrack.ino)
+
+### 1. Initialization (`setup()`)
+*   Initializes Serial communication for debugging.
+*   Initializes I2C communication with `Wire.begin()`.
+*   Configures the **MPU6050** by waking it up from sleep mode.
+*   Sets pin modes for the LED (Output) and Calibration Button (Input).
+
+### 2. Data Acquisition & Processing
+*   The system communicates with the MPU6050 via I2C to read raw accelerometer data (Ax, Ay, Az).
+*   **Pitch Calculation**: The raw values are converted to a pitch angle using the formula:
+    `pitch = atan2(Ax, sqrt(Ay*Ay + Az*Az)) * 180 / PI`
+
+### 3. Calibration Logic
+*   When the button (GPIO 4) is pressed:
+    *   The current pitch is stored as `referencePitch`.
+    *   The system sets `calibrated = true` to begin monitoring.
+    *   This "zeros" the system to the user's current comfortable posture.
+
+### 4. Slouch Detection Logic (`loop()`)
+*   The code continuously checks the **deviation**: `pitch - referencePitch`.
+*   If `deviation > 20 degrees`:
+    *   A timer (`slouchStartTime`) starts.
+    *   If the condition persists for > 5 seconds, the LED turns ON (Alert).
+*   If the user corrects their posture (deviation < 20°):
+    *   The timer resets.
+    *   The LED turns OFF.
+
+
 ## Simulation & Testing
 
 The system was validated using the Wokwi simulation environment before hardware integration.
@@ -102,25 +172,22 @@ The system was validated using the Wokwi simulation environment before hardware 
 *   **Simulation Link 1**: [Wokwi Project 1](https://wokwi.com/projects/455928787309524993)
 *   **Simulation Link 2**: [Wokwi Project 2](https://wokwi.com/projects/455996891569295361)
 
-### Visual Gallery
+## Schematic & Test Results
 
-Below are snapshots from the development, simulation, and testing phases.
+*(This section will be updated with circuit schematics and real-world test data images)*
 
-![Screenshot 1](images/Screenshot%202026-02-13%20225551.png)
-![Screenshot 2](images/Screenshot%202026-02-13%20225617.png)
-![Screenshot 3](images/Screenshot%202026-02-14%20162929.png)
-![Screenshot 4](images/Screenshot%202026-02-15%20085700.png)
-![Screenshot 5](images/Screenshot%202026-02-15%20085900.png)
-![Screenshot 6](images/Screenshot%202026-02-15%20123317.png)
-![Screenshot 7](images/Screenshot%202026-02-15%20123810.png)
-![Screenshot 8](images/Screenshot%202026-02-15%20125554.png)
-![Screenshot 9](images/Screenshot%202026-02-15%20130217.png)
-![Screenshot 10](images/Screenshot%202026-02-15%20131730.png)
-![Screenshot 11](images/Screenshot%202026-02-15%20133434.png)
-![Screenshot 12](images/Screenshot%202026-02-15%20134223.png)
-![Screenshot 13](images/Screenshot%202026-02-15%20134935.png)
+### PCB Design
+We are currently designing a custom PCB for SpineTrack to make it a compact wearable.
+*   **Status**: In Progress
+*   **Files**: Gerber, BOM, and Pick & Place files will be uploaded here once completed.
+*   **Folder**: `PCB_Files/` (Coming Soon)
+
+
+
 
 ## Future Scope
+
+![OLED Display](images/oleddisplay%20image.png)
 
 *   **OLED Display**: Real-time angle and rep count.
 *   **Haptic Feedback**: Vibration alerts for silent correction.
